@@ -1,0 +1,196 @@
+{
+  "name": "7z-secure-workspace",
+  "displayName": "7z Secure Workspace",
+  "description": "Open and edit encrypted 7z archives as VS Code workspaces with Secure Virtual, Standard Virtual, and Materialized modes.",
+  "version": "0.1.0",
+  "publisher": "Nishitox",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": true,
+      "description": "This extension provides an encrypted 7z virtual workspace."
+    },
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "activationEvents": [
+    "onCommand:encrypted7zSecure.openArchive",
+    "onCommand:encrypted7zSecure.closeArchive",
+    "onFileSystem:encrypted7z",
+    "*",
+    "onCommand:encrypted7zSecure.toggleDataEncryption",
+    "onCommand:encrypted7zSecure.toggleHeaderEncryption",
+    "onCustomEditor:encrypted7zSecure.secureTextEditor",
+    "onCustomEditor:encrypted7zSecure.archiveOpener",
+    "onFileSystem:encrypted7z-secure",
+    "onCommand:encrypted7zSecure.syncMaterialized",
+    "onView:encrypted7zSecure.actions"
+  ],
+  "main": "./extension.js",
+  "categories": [
+    "Other"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "encrypted7zSecure.openArchive",
+        "title": "7z Secure: Open Encrypted Archive",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "encrypted7zSecure.closeArchive",
+        "title": "7z Secure: Close Encrypted Archive",
+        "icon": "$(close)"
+      },
+      {
+        "command": "encrypted7zSecure.toggleDataEncryption",
+        "title": "7z Secure: Toggle Data Encryption",
+        "icon": "$(key)"
+      },
+      {
+        "command": "encrypted7zSecure.toggleHeaderEncryption",
+        "title": "7z Secure: Toggle Header Encryption",
+        "icon": "$(lock)"
+      },
+      {
+        "command": "encrypted7zSecure.secureEditorSecurityStatus",
+        "title": "7z Secure: Secure Editor Security Status",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "encrypted7zSecure.syncMaterialized",
+        "title": "7z Secure: Sync Materialized Working Directory",
+        "icon": "$(sync)"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "encrypted7zSecure.toggleDataEncryption",
+          "when": "(resourceScheme == encrypted7z || resourceScheme == encrypted7z-secure) && !explorerResourceIsFolder",
+          "group": "7z_secure@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "encrypted7zSecure.toggleDataEncryption",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "encrypted7zSecure.openArchive",
+          "when": "view == encrypted7zSecure.actions && !encrypted7zSecure.sessionOpen",
+          "group": "navigation@1"
+        },
+        {
+          "command": "encrypted7zSecure.syncMaterialized",
+          "when": "view == encrypted7zSecure.actions && encrypted7zSecure.materializedSession",
+          "group": "navigation@2"
+        },
+        {
+          "command": "encrypted7zSecure.toggleHeaderEncryption",
+          "when": "view == encrypted7zSecure.actions && encrypted7zSecure.virtualSession && encrypted7zSecure.headerEncryptionApplicable",
+          "group": "navigation@3"
+        },
+        {
+          "command": "encrypted7zSecure.secureEditorSecurityStatus",
+          "when": "view == encrypted7zSecure.actions && encrypted7zSecure.secureVirtualSession",
+          "group": "navigation@4"
+        },
+        {
+          "command": "encrypted7zSecure.closeArchive",
+          "when": "view == encrypted7zSecure.actions && encrypted7zSecure.sessionOpen",
+          "group": "navigation@9"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "encrypted7zSecure.archiveOpener",
+        "displayName": "7z Secure Workspace",
+        "selector": [
+          {
+            "filenamePattern": "*.7z"
+          },
+          {
+            "filenamePattern": "*.7Z"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "encrypted7zSecure.secureTextEditor",
+        "displayName": "7z Secure Text Editor",
+        "selector": [
+          {
+            "filenamePattern": "encrypted7z-secure:/**"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "encrypted7zSecure",
+          "title": "7z Secure",
+          "icon": "media/7z-secure.svg"
+        }
+      ]
+    },
+    "views": {
+      "encrypted7zSecure": [
+        {
+          "id": "encrypted7zSecure.actions",
+          "name": "Archive",
+          "icon": "media/7z-secure.svg",
+          "contextualTitle": "7z Secure"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "encrypted7zSecure.actions",
+        "contents": "Open an encrypted 7z archive in Secure Virtual, Standard Virtual, or Materialized mode.\n[Open Encrypted Archive](command:encrypted7zSecure.openArchive)",
+        "when": "!encrypted7zSecure.sessionOpen"
+      },
+      {
+        "view": "encrypted7zSecure.actions",
+        "contents": "A virtual archive session is active.\n[Close Encrypted Archive](command:encrypted7zSecure.closeArchive)\n[Toggle Header Encryption](command:encrypted7zSecure.toggleHeaderEncryption)\nPer-file data encryption is available from the Explorer file context menu.",
+        "when": "encrypted7zSecure.virtualSession && encrypted7zSecure.headerEncryptionApplicable"
+      },
+      {
+        "view": "encrypted7zSecure.actions",
+        "contents": "An empty virtual archive session is active.\n[Close Encrypted Archive](command:encrypted7zSecure.closeArchive)\nHeader encryption: N/A — there are no member names to encrypt.",
+        "when": "encrypted7zSecure.virtualSession && !encrypted7zSecure.headerEncryptionApplicable"
+      },
+      {
+        "view": "encrypted7zSecure.actions",
+        "contents": "[Secure Editor Security Status](command:encrypted7zSecure.secureEditorSecurityStatus)",
+        "when": "encrypted7zSecure.secureVirtualSession"
+      },
+      {
+        "view": "encrypted7zSecure.actions",
+        "contents": "Materialized mode uses a plaintext TEMP working directory with autosync.\n[Sync Materialized Now](command:encrypted7zSecure.syncMaterialized)\n[Close Encrypted Archive](command:encrypted7zSecure.closeArchive)",
+        "when": "encrypted7zSecure.materializedSession"
+      }
+    ]
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nishitox/7z-Secure-Workspace.git"
+  },
+  "homepage": "https://github.com/Nishitox/7z-Secure-Workspace#readme",
+  "bugs": {
+    "url": "https://github.com/Nishitox/7z-Secure-Workspace/issues"
+  },
+  "icon": "media/icon.png"
+}

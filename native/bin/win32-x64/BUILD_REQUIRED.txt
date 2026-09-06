@@ -1,0 +1,2 @@
+Run ..\..\build-native.ps1 to create e7z_bridge.exe, copy the pinned 7-Zip 7z.dll,
+copy third-party license texts, and generate runtime-manifest.json in this directory.

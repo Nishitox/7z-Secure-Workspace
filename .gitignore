@@ -1,0 +1,21 @@
+# Native/CMake build output
+native/build/
+
+# Generated native runtime binaries (publish via VSIX/GitHub Release artifacts)
+native/bin/win32-x64/e7z_bridge.exe
+native/bin/win32-x64/7z.dll
+native/bin/win32-x64/runtime-manifest.json
+native/bin/win32-x64/licenses/
+
+# Packaged extension/release artifacts
+*.vsix
+*.zip
+
+# Local JavaScript / VS Code test tooling
+node_modules/
+.vscode-test/
+
+# Local logs / OS metadata
+*.log
+.DS_Store
+Thumbs.db

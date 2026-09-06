@@ -1,0 +1,12 @@
+.vscode/**
+.git/**
+.github/**
+native/src/**
+native/CMakeLists.txt
+native/build-native.ps1
+package-vsix.ps1
+**/*.zip
+**/*.vsix
+.gitignore
+native/build/**
+native/bin/win32-x64/BUILD_REQUIRED.txt
