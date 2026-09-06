@@ -1055,7 +1055,7 @@ async function createMaterializedWorkingDirectory() {
 
   const prefix = path.join(
     os.tmpdir(),
-    "encrypted-7z-secure-"
+    "7z-secure-workspace-"
   );
 
   const workingDir = await fs.promises.mkdtemp(prefix);
