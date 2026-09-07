@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(e7z_bridge VERSION 0.1.0 LANGUAGES CXX)
+project(e7z_bridge VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT WIN32)
-    message(FATAL_ERROR "Stage 8 bridge currently targets Windows only.")
+    message(FATAL_ERROR "The native bridge currently targets Windows only.")
 endif()
 
 include(FetchContent)
