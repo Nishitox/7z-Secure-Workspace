@@ -1,5 +1,6 @@
 # 7z Secure Workspace
 
+[English](README.md) | [日本語](README.ja.md)
 A Windows VS Code extension for opening and editing encrypted `.7z` archives as
 workspaces, with explicit security and compatibility tradeoffs for different
 editing modes.
