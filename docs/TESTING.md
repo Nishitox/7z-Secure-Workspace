@@ -1,5 +1,32 @@
 # Regression Testing
 
+## Stable 1.0 validation environment
+
+The 1.0.0 regression pass was performed on Windows x64 with VS Code 1.136.1.
+`package.json` therefore declares `^1.136.1` as the stable 1.0 minimum. A future
+lower minimum should be claimed only after explicit compatibility testing on
+that VS Code line.
+
+The final 1.0 regression matrix covered these representative boundaries and
+passed:
+
+1. Secure Virtual / Header ON / encrypted edit-save-reopen.
+2. Secure Virtual / Header ON / existing unencrypted non-empty file normal save.
+3. Standard Virtual / mixed encrypted + unencrypted normal editing.
+4. Virtual create / rename / delete / mkdir / zero-byte behavior.
+5. Solid mixed-encryption Data Encryption toggle, including content/CRC and the
+   reblock MTime/Windows-attributes preservation regression.
+6. Materialized edit / add / delete / rename filesystem synchronization, with
+   archive metadata fidelity evaluated according to the documented Materialized
+   boundary rather than as an archive-identity guarantee.
+7. Materialized explicit close/cleanup and retained-TEMP recovery after abnormal
+   termination.
+8. Virtual VS Code restart fail-closed behavior.
+9. External archive fingerprint conflict rejection without overwriting the
+   externally changed `.7z`.
+10. Direct `.7z` Custom Editor coexistence with another archive extension via VS
+    Code's editor selection UI.
+
 Run this checklist after structural cleanup or native protocol changes.
 
 ## Build smoke test

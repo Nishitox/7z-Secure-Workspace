@@ -1,5 +1,16 @@
 # Security Model
 
+## Reporting security issues
+
+Security-sensitive findings should be reported through GitHub Private
+vulnerability reporting instead of a public Issue when that feature is enabled
+for the repository. Do not include real archive passwords, private archives, or
+sensitive plaintext unless a secure exchange has been explicitly agreed.
+
+The project is maintained on a best-effort basis and does not promise a
+response-time or support SLA. Public Issues remain appropriate for ordinary
+non-sensitive reproducible bugs.
+
 ## Security goal
 
 This file is the canonical record of security intent for the project. Structural
@@ -355,12 +366,18 @@ outside the guarantee.
 
 ## Materialized TEMP placement and Git metadata
 
-Materialized plaintext is created in a random subdirectory of the system TEMP
-directory rather than beside the source `.7z`.
+Materialized plaintext is created in a random extension-owned subdirectory of
+the system TEMP directory rather than beside the source `.7z`:
 
-This avoids a common accidental-disclosure path where an encrypted archive lives
-inside OneDrive, Dropbox, NAS sync, or a backup-managed project directory and a
-neighboring plaintext copy would be replicated automatically.
+```text
+%TEMP%\7z-secure-workspace-<random>\
+```
+
+The source archive basename is intentionally not included in the TEMP directory
+name. This avoids disclosing the archive name through the plaintext working-copy
+path and avoids a common accidental-disclosure path where an encrypted archive
+lives inside OneDrive, Dropbox, NAS sync, or a backup-managed project directory
+and a neighboring plaintext copy would be replicated automatically.
 
 System TEMP is still plaintext persistent storage. The choice reduces accidental
 lifetime/replication; it does not provide forensic secure deletion.

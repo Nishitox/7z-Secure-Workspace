@@ -1,12 +1,17 @@
 # Development Guide
 
-## Pre-release compatibility policy
+## Compatibility and migration policy
 
-Until the first stable release, do not keep compatibility code merely for older
-development builds unless it protects user data that cannot otherwise be
-recovered.
+The public extension identity is `Nishitox.7z-secure-workspace`.
 
-Prefer one clear current design over accumulating migration branches.
+Preserve user data and documented release behavior across stable 1.x updates,
+but do not add migration branches merely to preserve unpublished development-build
+internals.
+
+Legacy internal identifiers such as URI schemes, command ids, and persisted
+session keys may remain when changing them would add risk without user-facing
+benefit. Any migration that touches password/session/recovery state requires an
+explicit security review.
 
 ## Contributor / Codex design rules
 
@@ -82,10 +87,12 @@ dependencies to Secure Webviews without an explicit security review.
 Do not attempt automatic merge/reconciliation inside the encrypted archive.
 A fingerprint mismatch invalidates the mounted view.
 
-### 12. Logging must move toward less disclosure
+### 12. Keep routine logging privacy-minimized
 
-Final routine logs should describe operations without archive paths or member
-names. Never log passwords or plaintext contents.
+Routine release logs should describe operations without source archive paths,
+archive member names, Materialized event paths, fingerprint values, passwords,
+or plaintext contents. Add more disclosure only for an explicit diagnostic need
+and review it as a privacy/security change.
 
 ## Current mode model
 
@@ -100,24 +107,52 @@ archive is opened, and persisted through the one-shot workspace handoff.
 Mode selection is a session boundary. Do not reintroduce per-file commands that
 switch Secure/Standard editor semantics inside an already-open session.
 
-## File organization policy
+## Runtime source layout and responsibility boundaries
 
-During architectural cleanup, keeping the main extension logic together can make
-cross-cutting review easier.
+The v0.0.31 source split was intentionally mechanical: responsibilities moved
+into modules, but archive mutation, session routing, native protocol behavior,
+and security semantics were not redesigned as part of that refactor. Preserve
+that history when reviewing later structural changes.
 
-Split source files only after responsibilities are stable enough that module
-boundaries are obvious. Do not split merely to reduce line count.
+`extension.js` is the composition root. It registers VS Code providers,
+commands, listeners, and shared controllers; archive/security logic belongs in
+`src/` rather than being re-inlined into the entry point.
 
-Expected eventual responsibility boundaries include:
+Current runtime layout:
 
-- session / mount lifecycle
-- virtual filesystem
-- archive transaction layer
-- native bridge client
-- Secure Text Editor
-- direct `.7z` opener
-- mode routing
-- Materialized mode
+```text
+extension.js                 activation / registrations / command wiring
+src/constants.js             shared identifiers and session-mode constants
+src/direct-open/provider.js  local .7z launcher Custom Editor
+src/virtual/                 virtual archive FileSystemProvider + decorations
+src/secure-editor/           private CustomDocument Secure Text Editor
+src/security/paths.js        untrusted path validation + materialization checks
+src/native/backend.js        native stdin/stdout protocol + e7z_bridge wrapper
+src/archive/core.js          fingerprints, stable reads, transactions, mode helpers
+src/session/lifecycle.js     session routing/recovery + Materialized lifecycle
+src/ui/activity-bar.js       Activity Bar state/presentation
+```
+
+Keep these responsibility boundaries explicit:
+
+- `VirtualArchiveProvider`: virtual filesystem/tree and archive-session
+  operations; transaction/fingerprint/tree-refresh lifecycle stays centralized
+  in `runTransactionalMutation()`.
+- archive-state reader: stable fingerprint + LIST/header probe + archive-entry
+  validation.
+- session lifecycle: immutable mode, mount handoff, fail-closed expiry,
+  teardown, return-target restoration, and Materialized recovery.
+- open pipeline: `prepareAuthenticatedArchive()` owns common authentication and
+  stable archive state; `routeAuthenticatedArchiveSession()` is the mode split.
+- `Native7zBackend`: binary-protocol transport and typed native operations.
+- native structural editor policy: structural mutations preserve required solid
+  and header policy through the established helper paths.
+- Secure Text Editor: private CustomDocument and encrypted-backup boundary.
+
+Do not split or merge modules merely to reduce line count. For refactors,
+preserve behavior first; do not combine module movement with changes to native
+protocol ids, transaction phases, session handoff semantics, Materialized
+recovery, or Secure Editor persistence.
 
 ## Build
 
@@ -156,39 +191,26 @@ alone.
 
 ### Packaging
 
-Use `package-vsix.ps1` when producing a local VSIX.
+Use `package-vsix.ps1` when producing a local VSIX. Packaging requires Node.js
+22 or newer because the current `@vscode/vsce` toolchain requires it. Node.js is
+a developer packaging dependency only; installed extension users do not need a
+separate Node.js installation.
 
-## Responsibility boundaries in the current single-file implementation
+The packaging script verifies the generated runtime manifest and the exact
+SHA-256 hashes of the bundled native binaries before creating the VSIX. See
+`RELEASE.md` for release provenance and `Source repository hygiene` /
+`Packaging rule` below for inclusion boundaries.
 
-Until source-file splitting, keep these conceptual boundaries explicit:
+## Deferred / non-blocking review items
 
-- `VirtualArchiveProvider`: VS Code virtual filesystem/tree plus archive-session
-  operations. Transaction/fingerprint/tree-refresh lifecycle is centralized in
-  `runTransactionalMutation()`.
-- archive-state reader: stable fingerprint + LIST/header probe + archive-entry
-  validation.
-- session lifecycle helpers: immutable session mode, mount handoff,
-  fail-closed expiry, teardown, and return-target restoration.
-- open pipeline: `prepareAuthenticatedArchive()` owns common authentication and
-  stable archive state; `routeAuthenticatedArchiveSession()` is the only mode
-  split.
-- `Native7zBackend`: binary-protocol transport and typed native operations.
-- native structural editor policy: delete/rename/mkdir preserve existing solid
-  and header policy through one shared helper.
-- Secure Text Editor: private CustomDocument and encrypted backup boundary.
+These are deliberate post-1.0 review items rather than missing stable-release
+features:
 
-Do not re-inline these responsibilities merely because all code still resides in
-one file.
-
-## Cleanup TODOs
-
-These are intentional future review items, not forgotten features:
-
-- review/renumber sparse native protocol operation ids if useful
-- enforce sensible large-file limits
-- finalize project publisher/repository/license metadata and release signing
-- final security review before release
-- split source files only after the above responsibilities settle
+- consider explicit large-file limits or streaming if real-world use requires it
+- review sparse native protocol operation ids only if protocol maintenance needs it
+- consider code signing for future release artifacts
+- refactor module boundaries only when it improves reviewability without changing
+  the established security/session invariants
 
 
 ## Mode-session invariants
@@ -318,8 +340,10 @@ discarded.
 
 ## Materialized TEMP/watcher invariants
 
-- default Materialized working directories are random extension-owned system-TEMP
-  directories; do not silently create plaintext beside the source archive
+- default Materialized working directories use
+  `%TEMP%\7z-secure-workspace-<random>\`; do not include the source archive
+  basename in the plaintext path or silently create plaintext beside the source
+  archive
 - `.git` is ordinary archive content; do not reintroduce `.git` exclusion
 - autosync is filesystem-event driven, not tied to text-save events
 - VS Code watcher and supplemental local recursive watcher feed one debounce
@@ -417,21 +441,6 @@ Native source/build files, `native/build/**`,
 `.vscode` debug configuration are development inputs and should not be shipped
 in the VSIX. The generated runtime manifest and copied third-party license texts
 are release inputs and must be shipped beside the native runtime binaries.
-
-Node.js is a developer packaging dependency (`@vscode/vsce`), not an installed
-runtime prerequisite. The desktop extension itself runs in VS Code's Node
-Extension Host.
-
-
-## Module-boundary rule
-
-Keep `extension.js` as the composition root. It may register VS Code providers,
-commands, listeners, and create shared runtime controllers, but new archive or
-security logic should live under `src/`.
-
-For refactors, preserve behavior first. Do not combine module movement with
-changes to native protocol IDs, transaction phases, session handoff semantics,
-or Secure Editor persistence.
 
 
 ## Header Encryption edge-case invariant

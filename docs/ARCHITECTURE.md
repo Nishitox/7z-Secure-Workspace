@@ -214,8 +214,9 @@ and reopening the archive.
 
 Materialized mode branches before virtual-workspace mounting. It writes a
 plaintext working tree to a fresh extension-owned random system-TEMP directory
-and later reconciles that tree back into an encrypted transactional candidate
-archive.
+of the form `%TEMP%\7z-secure-workspace-<random>\` and later reconciles that
+tree back into an encrypted transactional candidate archive. The source archive
+basename is intentionally not part of the working-directory name.
 
 
 ## Materialized session pipeline

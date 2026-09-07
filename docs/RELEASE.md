@@ -68,21 +68,23 @@ records needed to recreate them.
 
 ## Project release identity
 
-The initial public release line uses:
+The public release identity is:
 
 - product name: **7z Secure Workspace**
 - extension package name: `7z-secure-workspace`
 - publisher: `Nishitox`
 - repository: https://github.com/Nishitox/7z-Secure-Workspace
 - project source license: MIT (`Copyright (c) 2026 Nishitox`)
-- initial public version: `0.1.0`
+- first public pre-release: `0.1.0`
+- first stable release: `1.0.0`
+- stable 1.0 minimum/tested VS Code: `^1.136.1` / VS Code 1.136.1
 
 The README credits OpenAI GPT-5.6 Sol as development assistance while keeping
 Nishitox as the project developer/publisher. OpenAI/GPT branding is not used as
 part of the extension name or icon.
 
-Code signing is intentionally deferred for the initial GitHub release. Native
-binary hashes remain recorded in the runtime manifest and are rechecked during
-VSIX packaging. Signing can be added in a later release without changing the
-archive/security model.
+Code signing remains intentionally deferred for the 1.0.0 GitHub release.
+Native binary hashes remain recorded in the runtime manifest and are rechecked
+during VSIX packaging. Signing can be added in a later release without changing
+the archive/security model.
 
