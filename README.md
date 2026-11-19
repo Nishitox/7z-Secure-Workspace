@@ -8,8 +8,8 @@ editing modes.
 
 > **Development:** Developed by Nishitox with development assistance from OpenAI GPT-5.6 Sol.
 
-**Version 1.0.0 targets Windows x64 and VS Code 1.136.1 or later.** The stable
-1.0 release was regression-tested on VS Code 1.136.1.
+**Version 1.0.1 targets Windows x64 and VS Code 1.136.1 or later.** The stable
+1.0 baseline was regression-tested on VS Code 1.136.1.
 
 ## Current capabilities
 
@@ -82,6 +82,13 @@ The archive filename is intentionally not included in the TEMP directory name.
 `.git` is ordinary project content and is synchronized with the rest of the
 working tree; transient Git lock files defer autosync until Git metadata updates
 finish.
+
+Materialized change detection uses a per-session keyed content baseline instead
+of re-reading every archive member on every sync. After a successful archive
+commit, every file written by that sync is read back from the committed archive
+and verified before its new baseline is accepted. Verification cost therefore
+scales with the current write set rather than with unrelated files already in
+the archive.
 
 Materialized mode treats the real working directory as the source of truth. An
 operation such as rename may be represented as archive `delete + add`, so exact

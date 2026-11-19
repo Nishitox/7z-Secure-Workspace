@@ -8,7 +8,7 @@
 
 > **ドキュメントについて:** この日本語READMEは利用者向けの便宜的な翻訳です。詳細なセキュリティ、アーキテクチャ、開発仕様については、英語版READMEおよび `docs/` 配下の英語ドキュメントを正本とします。
 
-**Version 1.0.0 は Windows x64 および VS Code 1.136.1 以降を対象としています。** stable 1.0 releaseのregression testはVS Code 1.136.1で実施しました。
+**Version 1.0.1 は Windows x64 および VS Code 1.136.1 以降を対象としています。** stable 1.0 の基準regression testはVS Code 1.136.1で実施しました。
 
 ## 現在の機能
 
@@ -58,6 +58,8 @@ VS Code上のworking-copy exposureを最小化しますが、**完全なsandbox�
 ```
 
 TEMP directory名には、意図的にarchive filenameを含めません。`.git` は通常のproject contentとしてworking treeの他の内容とともに同期され、Gitの一時的なlock fileが存在する間はGit metadata更新が終わるまでautosyncを延期します。
+
+Materializedの変更検出では、毎回すべてのarchive memberを読み直すのではなく、sessionごとのkeyed content baselineを使用します。archiveへのcommit成功後、そのsyncで実際に書き込んだfileはすべてcommitted archiveからread-backして検証し、検証済みの内容だけを次のbaselineとして採用します。そのため検証コストはarchive全体のfile数ではなく、そのsyncで実際に書き込んだfile数・データ量に応じて増加します。
 
 Materialized modeでは、実際のworking directoryをsource of truthとして扱います。renameなどの操作はarchive側では `delete + add` として表現される場合があるため、archive itemの完全なidentity保持は保証されません。
 

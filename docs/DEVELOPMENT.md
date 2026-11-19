@@ -330,6 +330,16 @@ Materialized mode is filesystem-event driven:
 - manual Sync remains an explicit checkpoint/force-sync path
 - normal close/shutdown deletes plaintext only after successful final sync
 - failed final sync preserves plaintext for recovery
+- same-size existing files are compared against the per-session keyed content
+  baseline; do not reintroduce a full archive member extraction for every file
+  on every sync
+- every file actually written by a successful sync is read back from the
+  committed archive and verified before its baseline entry advances; do not
+  silently cap verification by file count or byte size without an explicit
+  design/security review
+- if post-commit verification fails, remember that commit has already occurred:
+  discard the derived baseline and surface the error rather than claiming
+  rollback
 
 Do not change shutdown cleanup to unconditional deletion.
 
@@ -345,6 +355,10 @@ discarded.
   basename in the plaintext path or silently create plaintext beside the source
   archive
 - `.git` is ordinary archive content; do not reintroduce `.git` exclusion
+- the Materialized content baseline/key are normal in-memory session state; the
+  initial workspace handoff may temporarily split keyed baseline records into
+  session state and the random key into SecretStorage, and both must be cleared
+  when the handoff completes
 - autosync is filesystem-event driven, not tied to text-save events
 - VS Code watcher and supplemental local recursive watcher feed one debounce
   queue; duplicate events are normal

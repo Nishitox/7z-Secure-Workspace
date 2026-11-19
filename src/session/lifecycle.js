@@ -13,6 +13,7 @@ const {
   ARCHIVE_PATH_KEY,
   HOT_EXIT_STATE_KEY,
   MATERIALIZED_CLEANUP_KEY,
+  MATERIALIZED_BASELINE_KEY,
   MATERIALIZED_AUTOSYNC_DEBOUNCE_MS,
   MATERIALIZED_GIT_LOCK_RETRY_MS,
   SESSION_MODE
@@ -23,8 +24,6 @@ const {
   isPathWithinDirectory,
   isMaterializedGitLockPath,
   MaterializedGitBusyError,
-  sha256DiskFile,
-  sha256Bytes,
   scanMaterializedWorkingTree,
   filterTopmostDeletedPaths
 } = require("../security/paths");
@@ -43,6 +42,92 @@ const {
   mutateArchiveTransactionally,
   sameArchiveFingerprint
 } = require("../archive/core");
+
+function normalizeMaterializedPath(value) {
+  return String(value || "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/g, "");
+}
+
+function materializedHmacHex(key, value) {
+  return crypto
+    .createHmac("sha256", key)
+    .update(value)
+    .digest("hex");
+}
+
+function materializedContentHmacBytes(key, bytes) {
+  return crypto
+    .createHmac("sha256", key)
+    .update(bytes)
+    .digest("hex");
+}
+
+function materializedContentHmacDiskFile(key, filePath) {
+  return new Promise((resolve, reject) => {
+    const hmac = crypto.createHmac("sha256", key);
+    const stream = fs.createReadStream(filePath);
+
+    stream.on("data", (chunk) => hmac.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hmac.digest("hex")));
+  });
+}
+
+function serializeMaterializedBaselineForHandoff(
+  baselineKey,
+  baseline
+) {
+  const records = [];
+  for (const [relPath, value] of baseline) {
+    records.push({
+      p: materializedHmacHex(baselineKey, relPath),
+      h: value.hmac
+    });
+  }
+  return records;
+}
+
+function restoreMaterializedBaselineFromHandoff(
+  baselineKey,
+  records,
+  entries
+) {
+  if (!baselineKey || !Array.isArray(records)) {
+    return undefined;
+  }
+
+  const byPathHmac = new Map(
+    records.map((record) => [record?.p, record])
+  );
+  const baseline = new Map();
+
+  for (const entry of entries || []) {
+    if (entry.isDirectory) continue;
+
+    const relPath = normalizeMaterializedPath(entry.path);
+    const record = byPathHmac.get(
+      materializedHmacHex(baselineKey, relPath)
+    );
+    if (
+      !record ||
+      typeof record.h !== "string"
+    ) {
+      return undefined;
+    }
+
+    baseline.set(relPath, {
+      hmac: record.h,
+      size: entry.size
+    });
+  }
+
+  if (baseline.size !== byPathHmac.size) {
+    return undefined;
+  }
+
+  return baseline;
+}
 
 class MaterializedSessionController {
   constructor(output) {
@@ -81,6 +166,11 @@ class MaterializedSessionController {
     this.headerEncrypted = undefined;
     this.entries = [];
     this.returnTarget = undefined;
+    if (Buffer.isBuffer(this.baselineKey)) {
+      this.baselineKey.fill(0);
+    }
+    this.baselineKey = undefined;
+    this.contentBaseline = undefined;
   }
 
   load({
@@ -91,7 +181,9 @@ class MaterializedSessionController {
     archiveFingerprint,
     headerEncrypted,
     entries,
-    returnTarget
+    returnTarget,
+    baselineKey,
+    contentBaseline
   }) {
     this.externalFinalizePromise = undefined;
     this.mode = SESSION_MODE.MATERIALIZED;
@@ -103,6 +195,8 @@ class MaterializedSessionController {
     this.headerEncrypted = headerEncrypted;
     this.entries = entries || [];
     this.returnTarget = returnTarget;
+    this.baselineKey = baselineKey;
+    this.contentBaseline = contentBaseline;
   }
 
   startAutosyncWatchers(context) {
@@ -318,6 +412,52 @@ class MaterializedSessionController {
     this.entries = stable.entries;
   }
 
+  async ensureContentBaseline() {
+    if (
+      Buffer.isBuffer(this.baselineKey) &&
+      this.contentBaseline instanceof Map
+    ) {
+      return;
+    }
+
+    const baselineKey = crypto.randomBytes(32);
+    const baseline = new Map();
+
+    try {
+      for (const entry of this.entries) {
+        if (entry.isDirectory) continue;
+
+        const relPath = normalizeMaterializedPath(entry.path);
+        const bytes = await this.backend.read(
+          this.archivePath,
+          this.password,
+          relPath
+        );
+
+        try {
+          baseline.set(relPath, {
+            hmac: materializedContentHmacBytes(
+              baselineKey,
+              bytes
+            ),
+            size: bytes.length
+          });
+        } finally {
+          bytes.fill(0);
+        }
+      }
+    } catch (error) {
+      baselineKey.fill(0);
+      throw error;
+    }
+
+    if (Buffer.isBuffer(this.baselineKey)) {
+      this.baselineKey.fill(0);
+    }
+    this.baselineKey = baselineKey;
+    this.contentBaseline = baseline;
+  }
+
   syncToArchive(context) {
     const run = this.syncQueue.then(
       () => this.syncToArchiveExclusive(context)
@@ -357,9 +497,14 @@ class MaterializedSessionController {
       throw new MaterializedGitBusyError(gitLock.path);
     }
 
+    // The content baseline is built during normal materialization. Recovery or
+    // an interrupted handoff may lose the in-memory state, in which case it is
+    // rebuilt once from the actual archive before change detection continues.
+    await this.ensureContentBaseline();
+
     const originalMap = new Map(
       this.entries.map((entry) => [
-        entry.path.replace(/\\/g, "/").replace(/\/+$/g, ""),
+        normalizeMaterializedPath(entry.path),
         entry
       ])
     );
@@ -425,17 +570,15 @@ class MaterializedSessionController {
       }
 
       if (!changed) {
-        const archiveBytes = await this.backend.read(
-          this.archivePath,
-          this.password,
-          current.path
-        );
-        try {
-          const archiveHash = sha256Bytes(archiveBytes);
-          const diskHash = await sha256DiskFile(current.absolutePath);
-          changed = archiveHash !== diskHash;
-        } finally {
-          archiveBytes.fill(0);
+        const baseline = this.contentBaseline.get(current.path);
+        if (!baseline || baseline.size !== current.size) {
+          changed = true;
+        } else {
+          const diskHmac = await materializedContentHmacDiskFile(
+            this.baselineKey,
+            current.absolutePath
+          );
+          changed = baseline.hmac !== diskHmac;
         }
       }
 
@@ -490,6 +633,14 @@ class MaterializedSessionController {
         for (const file of filesToWrite) {
           const bytes = await fs.promises.readFile(file.absolutePath);
           try {
+            // Recompute from the exact bytes being committed. The working
+            // file may have changed again after change detection.
+            file.contentHmac = materializedContentHmacBytes(
+              this.baselineKey,
+              bytes
+            );
+            file.committedSize = bytes.length;
+
             await this.backend.write(
               candidateArchive,
               this.password,
@@ -506,6 +657,59 @@ class MaterializedSessionController {
 
     this.archiveFingerprint = transaction.fingerprint;
 
+    // Verify every file written by this sync against the actual committed
+    // archive. Verification cost intentionally scales with the current write
+    // set, not with unrelated members already present in the archive.
+    const verifiedWrittenHmacs = new Map();
+    let readBackError;
+
+    for (const file of filesToWrite) {
+      let bytes;
+      try {
+        bytes = await this.backend.read(
+          this.archivePath,
+          this.password,
+          file.path
+        );
+
+        const actualHmac = materializedContentHmacBytes(
+          this.baselineKey,
+          bytes
+        );
+        if (
+          bytes.length !== file.committedSize ||
+          actualHmac !== file.contentHmac
+        ) {
+          readBackError = new Error(
+            "Materialized post-commit read-back verification failed. " +
+            "The archive was committed, but at least one written file did not read back as the bytes that were submitted. " +
+            "The in-memory content baseline was discarded; run Sync again or close and reopen the archive before relying on the session state."
+          );
+          break;
+        }
+
+        verifiedWrittenHmacs.set(file.path, {
+          hmac: actualHmac,
+          size: bytes.length
+        });
+      } catch (error) {
+        readBackError = new Error(
+          "Materialized post-commit read-back verification could not be completed. " +
+          "The archive was committed, but the written content could not be verified: " +
+          error.message
+        );
+        break;
+      } finally {
+        if (bytes) bytes.fill(0);
+      }
+    }
+
+    if (!readBackError && filesToWrite.length > 0) {
+      this.output.appendLine(
+        `[MATERIALIZED VERIFY] Read-back verified ${filesToWrite.length} written file(s).`
+      );
+    }
+
     const refreshed = await readStableArchiveState(
       this.backend,
       this.archivePath,
@@ -514,6 +718,34 @@ class MaterializedSessionController {
     this.archiveFingerprint = refreshed.fingerprint;
     this.headerEncrypted = refreshed.headerEncrypted;
     this.entries = refreshed.entries;
+
+    if (readBackError) {
+      // The archive has already been transactionally committed. Do not claim
+      // rollback here. Discard the derived baseline so the next sync rebuilds
+      // it from the actual archive instead of trusting unverified state.
+      this.contentBaseline = undefined;
+      this.output.appendLine(
+        `[MATERIALIZED VERIFY ERROR] ${readBackError.message}`
+      );
+      throw readBackError;
+    }
+
+    const nextBaseline = new Map();
+    for (const current of currentEntries) {
+      if (current.isDirectory) continue;
+
+      const written = verifiedWrittenHmacs.get(current.path);
+      if (written) {
+        nextBaseline.set(current.path, written);
+        continue;
+      }
+
+      const previous = this.contentBaseline.get(current.path);
+      if (previous && previous.size === current.size) {
+        nextBaseline.set(current.path, previous);
+      }
+    }
+    this.contentBaseline = nextBaseline;
 
     this.output.appendLine(
       `[MATERIALIZED SYNC] ${filesToWrite.length} file(s) written, ` +
@@ -801,8 +1033,15 @@ async function prepareMountHandoff(
 async function completeMountHandoff(context, saved) {
   await context.secrets.delete(PASSWORD_KEY);
   await context.secrets.delete(ARCHIVE_PATH_KEY);
+  await context.secrets.delete(MATERIALIZED_BASELINE_KEY);
+
+  const {
+    materializedBaselineHandoff: _materializedBaselineHandoff,
+    ...persistentState
+  } = saved || {};
+
   await context.globalState.update(SESSION_KEY, {
-    ...saved,
+    ...persistentState,
     handoffPending: false,
     endedExternally: false
   });
@@ -811,6 +1050,7 @@ async function completeMountHandoff(context, saved) {
 async function clearSession(context) {
   await context.secrets.delete(PASSWORD_KEY);
   await context.secrets.delete(ARCHIVE_PATH_KEY);
+  await context.secrets.delete(MATERIALIZED_BASELINE_KEY);
   await context.globalState.update(SESSION_KEY, undefined);
 }
 
@@ -1069,7 +1309,8 @@ async function createMaterializedWorkingDirectory() {
 async function materializeArchiveToDirectory(
   authenticated,
   workingDir,
-  output
+  output,
+  baselineKey
 ) {
   validateMaterializableEntries(
     authenticated.stableState.entries
@@ -1084,6 +1325,7 @@ async function materializeArchiveToDirectory(
         b.path.split(/[\\/]/).length
     );
   const files = entries.filter((entry) => !entry.isDirectory);
+  const contentBaseline = new Map();
 
   await vscode.window.withProgress(
     {
@@ -1125,6 +1367,13 @@ async function materializeArchiveToDirectory(
         );
         try {
           await fs.promises.writeFile(target, bytes, { flag: "wx" });
+          contentBaseline.set(rel, {
+            hmac: materializedContentHmacBytes(
+              baselineKey,
+              bytes
+            ),
+            size: bytes.length
+          });
         } finally {
           bytes.fill(0);
         }
@@ -1136,13 +1385,17 @@ async function materializeArchiveToDirectory(
   output.appendLine(
     `[MATERIALIZED] Decrypted ${files.length} file(s) into the working directory.`
   );
+
+  return contentBaseline;
 }
 
 async function prepareMaterializedHandoff(
   context,
   authenticated,
   workingDir,
-  returnTarget
+  returnTarget,
+  baselineKey,
+  contentBaseline
 ) {
   await context.globalState.update(SESSION_KEY, {
     mode: SESSION_MODE.MATERIALIZED,
@@ -1152,13 +1405,22 @@ async function prepareMaterializedHandoff(
     headerEncrypted: authenticated.stableState.headerEncrypted,
     returnTarget,
     handoffPending: true,
-    autosyncEnabled: true
+    autosyncEnabled: true,
+    materializedBaselineHandoff:
+      serializeMaterializedBaselineForHandoff(
+        baselineKey,
+        contentBaseline
+      )
   });
 
   await context.secrets.store(PASSWORD_KEY, authenticated.password);
   await context.secrets.store(
     ARCHIVE_PATH_KEY,
     authenticated.archivePath
+  );
+  await context.secrets.store(
+    MATERIALIZED_BASELINE_KEY,
+    baselineKey.toString("hex")
   );
 }
 
@@ -1218,8 +1480,18 @@ async function restoreMaterializedSession(
   backend.ensureAvailable();
 
   let password;
+  let baselineKey;
   if (saved.handoffPending) {
     password = await context.secrets.get(PASSWORD_KEY);
+    const baselineKeyHex = await context.secrets.get(
+      MATERIALIZED_BASELINE_KEY
+    );
+    if (
+      typeof baselineKeyHex === "string" &&
+      /^[0-9a-f]{64}$/i.test(baselineKeyHex)
+    ) {
+      baselineKey = Buffer.from(baselineKeyHex, "hex");
+    }
   }
 
   controller.load({
@@ -1230,7 +1502,9 @@ async function restoreMaterializedSession(
     archiveFingerprint: saved.archiveFingerprint,
     headerEncrypted: saved.headerEncrypted,
     entries: [],
-    returnTarget: saved.returnTarget
+    returnTarget: saved.returnTarget,
+    baselineKey,
+    contentBaseline: undefined
   });
 
   if (password) {
@@ -1250,6 +1524,27 @@ async function restoreMaterializedSession(
     } else {
       controller.entries = stable.entries;
       controller.headerEncrypted = stable.headerEncrypted;
+      controller.contentBaseline =
+        restoreMaterializedBaselineFromHandoff(
+          baselineKey,
+          saved.materializedBaselineHandoff,
+          stable.entries
+        );
+
+      if (!controller.contentBaseline) {
+        if (Buffer.isBuffer(controller.baselineKey)) {
+          controller.baselineKey.fill(0);
+        }
+        controller.baselineKey = undefined;
+        output.appendLine(
+          "[MATERIALIZED] Content baseline handoff unavailable; the next sync will rebuild it once from the archive."
+        );
+      } else {
+        output.appendLine(
+          `[MATERIALIZED] Restored in-memory content baseline for ${controller.contentBaseline.size} file(s).`
+        );
+      }
+
       await completeMountHandoff(context, saved);
     }
   } else {
@@ -1482,18 +1777,23 @@ async function openMaterializedArchiveSession({
 
   const returnTarget = captureReturnTarget();
 
+  const baselineKey = crypto.randomBytes(32);
+
   try {
-    await materializeArchiveToDirectory(
+    const contentBaseline = await materializeArchiveToDirectory(
       authenticated,
       workingDir,
-      output
+      output,
+      baselineKey
     );
 
     await prepareMaterializedHandoff(
       context,
       authenticated,
       workingDir,
-      returnTarget
+      returnTarget,
+      baselineKey,
+      contentBaseline
     );
 
     materializedController.load({
@@ -1504,7 +1804,9 @@ async function openMaterializedArchiveSession({
       archiveFingerprint: authenticated.stableState.fingerprint,
       headerEncrypted: authenticated.stableState.headerEncrypted,
       entries: authenticated.stableState.entries,
-      returnTarget
+      returnTarget,
+      baselineKey,
+      contentBaseline
     });
 
     await mountMaterializedWorkspace(workingDir);

@@ -77,13 +77,22 @@ The public release identity is:
 - project source license: MIT (`Copyright (c) 2026 Nishitox`)
 - first public pre-release: `0.1.0`
 - first stable release: `1.0.0`
-- stable 1.0 minimum/tested VS Code: `^1.136.1` / VS Code 1.136.1
+- current maintenance release target: `1.0.1`
+- stable 1.x minimum VS Code: `^1.136.1`
+- stable 1.0 baseline tested VS Code: VS Code 1.136.1
+
+The 1.0.1 maintenance update changes JavaScript-side Materialized synchronization
+only: it replaces per-sync re-extraction of every existing file with a keyed
+in-memory content baseline and adds post-commit read-back verification for every
+file written by the current sync. Native protocol operations, 7z transaction
+structure, dependency pins, and the three session-mode security boundaries are
+unchanged.
 
 The README credits OpenAI GPT-5.6 Sol as development assistance while keeping
 Nishitox as the project developer/publisher. OpenAI/GPT branding is not used as
 part of the extension name or icon.
 
-Code signing remains intentionally deferred for the 1.0.0 GitHub release.
+Code signing remains intentionally deferred for the 1.0.x GitHub releases.
 Native binary hashes remain recorded in the runtime manifest and are rechecked
 during VSIX packaging. Signing can be added in a later release without changing
 the archive/security model.

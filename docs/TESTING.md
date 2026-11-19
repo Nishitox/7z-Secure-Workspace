@@ -2,10 +2,11 @@
 
 ## Stable 1.0 validation environment
 
-The 1.0.0 regression pass was performed on Windows x64 with VS Code 1.136.1.
-`package.json` therefore declares `^1.136.1` as the stable 1.0 minimum. A future
-lower minimum should be claimed only after explicit compatibility testing on
-that VS Code line.
+The stable 1.0 baseline regression pass was performed on Windows x64 with VS
+Code 1.136.1. `package.json` therefore keeps `^1.136.1` as the stable 1.x
+minimum. A future lower minimum should be claimed only after explicit
+compatibility testing on that VS Code line. The 1.0.1 maintenance regression
+adds the Materialized content-baseline/read-back cases below.
 
 The final 1.0 regression matrix covered these representative boundaries and
 passed:
@@ -404,6 +405,44 @@ Repeat with several rapid saves. Syncs must serialize without fingerprint races.
 
 The manual Sync command must still work and should report "already in sync" when
 nothing changed.
+
+### Materialized content-baseline / read-back regression
+
+The 1.0.1 performance fix changes only Materialized change detection and
+post-commit verification. Keep these cases in the stable regression set:
+
+1. Create/open an archive containing hundreds of small files, including many
+   files with identical sizes.
+2. In Materialized mode, change one existing file without changing its byte
+   length and allow autosync to complete.
+3. Confirm the archive contains the edit and Output reports exactly the current
+   write set as verified, e.g. `[MATERIALIZED VERIFY] Read-back verified 1
+   written file(s).`
+4. Confirm a subsequent manual Sync with no changes reports no working-tree
+   changes and performs no file write/read-back verification.
+5. Repeat with a non-solid archive and a solid archive. The operation may still
+   pay normal 7z rewrite cost, but change detection must not scale by extracting
+   every unrelated archive member.
+6. Run `git init` or another intentionally broad filesystem change. Longer sync
+   time is acceptable because many files are genuinely written and then
+   read-back verified; the cost should scale with that current write set rather
+   than total unrelated archive membership.
+7. After the broad change settles, make/commit a small Git change. Confirm the
+   normal small-change workflow remains responsive and only the files written by
+   that sync are verified.
+8. Exercise the initial `vscode.openFolder` handoff and confirm the Materialized
+   session resumes with a usable content baseline. If the one-shot baseline
+   handoff is deliberately made unavailable, the next sync may rebuild the
+   baseline once from the actual archive and must then proceed normally.
+9. In a development-only fault-injection/mock path, make post-commit `read`
+   return different bytes for a written file. Confirm sync reports a
+   verification error, does not claim rollback, discards the derived baseline,
+   refreshes archive state, and preserves the plaintext working directory.
+
+Do not set a fixed wall-clock pass/fail threshold: storage, compression method,
+solid layout, file size, and hardware materially affect normal 7z rewrite time.
+The regression invariant is algorithmic: unchanged archive members must not be
+re-extracted merely to compare each Materialized file on every sync.
 
 ### Normal close cleanup
 

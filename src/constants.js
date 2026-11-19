@@ -11,6 +11,8 @@ const ARCHIVE_PATH_KEY = "encrypted7zSecure.currentArchivePath";
 const HOT_EXIT_STATE_KEY = "encrypted7zSecure.hotExitPreviousState";
 const MATERIALIZED_CLEANUP_KEY =
   "encrypted7zSecure.materializedPendingCleanup";
+const MATERIALIZED_BASELINE_KEY =
+  "encrypted7zSecure.materializedBaselineKey";
 const MATERIALIZED_AUTOSYNC_DEBOUNCE_MS = 250;
 const MATERIALIZED_GIT_LOCK_RETRY_MS = 500;
 const ARCHIVE_OPENER_VIEW_TYPE =
@@ -31,6 +33,7 @@ module.exports = {
   ARCHIVE_PATH_KEY,
   HOT_EXIT_STATE_KEY,
   MATERIALIZED_CLEANUP_KEY,
+  MATERIALIZED_BASELINE_KEY,
   MATERIALIZED_AUTOSYNC_DEBOUNCE_MS,
   MATERIALIZED_GIT_LOCK_RETRY_MS,
   ARCHIVE_OPENER_VIEW_TYPE,

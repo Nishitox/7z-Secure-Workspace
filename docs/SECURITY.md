@@ -313,7 +313,13 @@ Security rules:
   metadata transaction
 - the encrypted source archive fingerprint must still match the session
   baseline before sync; external archive changes cause sync refusal
+- working-tree content comparison uses a random per-session HMAC-SHA-256
+  baseline rather than storing plaintext or an unkeyed content digest as the
+  ordinary Materialized comparison state
 - sync still uses encrypted candidate + 7z integrity test + `ReplaceFileW`
+- every file written by a successful sync is read back from the committed
+  archive and verified by byte length and keyed HMAC before its new baseline is
+  accepted
 - same-path edits to an existing non-empty file preserve that item's
   data-encryption state; a new/recreated/new-path non-empty item follows the
   new-data default and is encrypted
@@ -329,6 +335,33 @@ Security rules:
 
 If sync fails or the source archive changed externally, the plaintext working
 directory is retained so user edits are not destroyed.
+
+### Materialized baseline security and failure semantics
+
+The Materialized content baseline is performance/security-derived state, not a
+second plaintext copy. It uses HMAC-SHA-256 with a random 32-byte per-session
+key. During ordinary operation both the key and baseline live in extension
+memory. The initial `vscode.openFolder` handoff is the exception: keyed
+path/content records are temporarily stored in session state and the HMAC key is
+stored separately in SecretStorage so the restarted Extension Host can restore
+the baseline without re-reading every archive member. Handoff state and key are
+deleted when the mount completes.
+
+This mechanism does not replace the encrypted-source archive fingerprint.
+Fingerprint checks still detect external modification of the `.7z`; the content
+baseline answers a different question: whether a Materialized working-tree file
+changed relative to the archive state already accepted by this session.
+
+Post-commit read-back verification ties the baseline back to the actual archive
+contents. Every file written by the current sync is re-read from the committed
+archive with no count/size cap and must match the submitted byte length and HMAC.
+Unrelated pre-existing members are not re-read solely for change detection.
+
+Read-back happens after `ReplaceFileW` commit. If it fails or mismatches, do not
+claim rollback: the archive may already contain the committed candidate. The
+extension discards its derived content baseline, refreshes archive state, reports
+an error, and retains the Materialized working tree. A subsequent sync can
+rebuild the baseline from the actual archive and reconcile remaining differences.
 
 
 ## Activation registration ordering

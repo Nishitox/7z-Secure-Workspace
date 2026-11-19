@@ -2,7 +2,7 @@
   "name": "7z-secure-workspace",
   "displayName": "7z Secure Workspace",
   "description": "Open and edit encrypted 7z archives as VS Code workspaces with Secure Virtual, Standard Virtual, and Materialized modes.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "Nishitox",
   "engines": {
     "vscode": "^1.136.1"

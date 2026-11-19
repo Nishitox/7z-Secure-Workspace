@@ -234,12 +234,47 @@ normal VS Code / Git / LSP tooling
         ↓
 scan working tree
         ↓
-compare against unchanged source archive
+compare file contents against keyed in-memory baseline
         ↓
 transactional delete/mkdir/write candidate
         ↓
 7z test + ReplaceFileW commit
+        ↓
+read back every file written by this sync
+        ↓
+verify committed size/HMAC and advance baseline
 ```
+
+### Materialized content baseline and write verification
+
+Materialized mode does not re-extract every existing archive member merely to
+decide whether the working tree changed. During initial materialization the
+extension derives a per-session HMAC-SHA-256 baseline for each file using a
+random 32-byte key. The baseline records normalized-path identity, content HMAC,
+and size; plaintext file contents are not retained in the baseline.
+
+Normal sync scans the working tree and compares same-size existing files against
+that in-memory keyed baseline. If the baseline is unavailable after recovery or
+an interrupted handoff, it is rebuilt once from the actual archive before
+change detection proceeds.
+
+`vscode.openFolder` restarts the Extension Host during the initial Materialized
+mount. For that one-shot handoff only, path/content HMAC records are stored in
+session state while the random HMAC key is stored separately in SecretStorage.
+Both handoff forms are deleted when the mount handoff completes. Ordinary
+session operation keeps the key and baseline in memory.
+
+After the transactional archive replacement succeeds, each file written by that
+sync is read back from the committed archive and compared by exact byte length
+and keyed HMAC against the bytes submitted to the candidate. There is no
+verification count/size cap: verification scales with the current write set,
+not with unrelated members already present in the archive.
+
+Read-back verification is post-commit. A verification failure therefore does
+not mean the previous archive was automatically restored. The controller
+refreshes archive state, discards the derived content baseline, reports the sync
+as failed, and requires a later sync/reopen to establish trusted baseline state
+again.
 
 Materialized reconciliation is path-based and can interpret filesystem
 renames as delete + add. A content edit at the same existing non-empty path
