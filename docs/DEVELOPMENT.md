@@ -197,9 +197,11 @@ a developer packaging dependency only; installed extension users do not need a
 separate Node.js installation.
 
 The packaging script verifies the generated runtime manifest and the exact
-SHA-256 hashes of the bundled native binaries before creating the VSIX. See
-`RELEASE.md` for release provenance and `Source repository hygiene` /
-`Packaging rule` below for inclusion boundaries.
+SHA-256 hashes of the bundled native binaries before creating the VSIX. Public
+VSIX packages must be created with the `win32-x64` target because the extension
+bundles Windows x64 native binaries; do not silently revert release packaging to
+a universal VSIX. See `RELEASE.md` for release provenance and `Source repository
+hygiene` / `Packaging rule` below for inclusion boundaries.
 
 ## Deferred / non-blocking review items
 

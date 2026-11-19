@@ -6,7 +6,9 @@ The stable 1.0 baseline regression pass was performed on Windows x64 with VS
 Code 1.136.1. `package.json` therefore keeps `^1.136.1` as the stable 1.x
 minimum. A future lower minimum should be claimed only after explicit
 compatibility testing on that VS Code line. The 1.0.1 maintenance regression
-adds the Materialized content-baseline/read-back cases below.
+adds the Materialized content-baseline/read-back cases below. The 1.0.2 release
+regression additionally checks Windows x64-targeted VSIX packaging and
+Marketplace metadata.
 
 The final 1.0 regression matrix covered these representative boundaries and
 passed:
@@ -568,7 +570,9 @@ to make F5 survive workspace reloads.
 
 ## VSIX content regression
 
-Run `.\package-vsix.ps1`, then inspect the VSIX file list.
+Run `.\package-vsix.ps1`, then inspect the VSIX file list and manifest. Confirm
+the VSIX declares `win32-x64` as its target platform rather than a universal
+package.
 
 Required runtime files include:
 
@@ -591,6 +595,11 @@ Before packaging, confirm the selected runtime DLL came intentionally from the
 upstream 7-Zip 26.03 x64 distribution, then confirm `build-native.ps1` reports
 bit7z commit `c81c6c1cbf44e148cd4b06f4bb69d7ea1e299742` and 7-Zip 26.03, and that
 `package-vsix.ps1` accepts the runtime manifest without a hash mismatch.
+
+Also confirm `package.json` keeps the Marketplace metadata used by the stable
+release: relevant archive/encryption keywords and `qna: false`, with normal bugs
+routed to GitHub Issues and security-sensitive reports to the documented private
+reporting path.
 
 Before a public source push, also inspect `git status --ignored` (or equivalent)
 and confirm generated native binaries, CMake build state, VSIX/ZIP artifacts,

@@ -8,7 +8,7 @@
 
 > **ドキュメントについて:** この日本語READMEは利用者向けの便宜的な翻訳です。詳細なセキュリティ、アーキテクチャ、開発仕様については、英語版READMEおよび `docs/` 配下の英語ドキュメントを正本とします。
 
-**Version 1.0.1 は Windows x64 および VS Code 1.136.1 以降を対象としています。** stable 1.0 の基準regression testはVS Code 1.136.1で実施しました。
+**Version 1.0.2 は Windows x64 および VS Code 1.136.1 以降を対象としています。** stable 1.0 の基準regression testはVS Code 1.136.1で実施しました。
 
 ## 現在の機能
 
@@ -110,11 +110,21 @@ Extension Development Hostにはdebugger固有のworkspace reload lifecycleが�
 
 ## インストール
 
-GitHub ReleaseからVSIXをダウンロードし、VS Codeで次の操作を行います。
+### VS Code Marketplace
+
+VS Codeで **Extensions** (`Ctrl+Shift+X`) を開き、**7z Secure Workspace** を検索して **Install** を選択します。command lineからは次でもインストールできます。
+
+```powershell
+code --install-extension Nishitox.7z-secure-workspace
+```
+
+### VSIXから手動インストール
+
+GitHub Releasesでもrelease VSIXを配布しています。VS Codeで次の操作を行います。
 
 **Extensions → `...` → Install from VSIX...**
 
-release VSIXにはnative bridgeと `7z.dll` が同梱されているため、end user側で別途native buildやNode.jsを用意する必要はありません。
+Marketplace/VSIX packageにはnative bridgeと `7z.dll` が同梱されているため、end user側で別途native buildやNode.jsを用意する必要はありません。配布packageはWindows x64をtargetとします。
 
 Repository: https://github.com/Nishitox/7z-Secure-Workspace
 

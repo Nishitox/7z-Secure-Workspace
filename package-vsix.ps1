@@ -108,6 +108,7 @@ if ($Package.license -ne "MIT" -or -not $Package.repository) {
 $Out = Join-Path $PSScriptRoot ("7z-secure-workspace-v{0}.vsix" -f $Package.version)
 
 npx --yes @vscode/vsce package `
+  --target win32-x64 `
   --no-dependencies `
   --allow-star-activation `
   --out $Out

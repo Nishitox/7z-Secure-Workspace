@@ -8,7 +8,7 @@ editing modes.
 
 > **Development:** Developed by Nishitox with development assistance from OpenAI GPT-5.6 Sol.
 
-**Version 1.0.1 targets Windows x64 and VS Code 1.136.1 or later.** The stable
+**Version 1.0.2 targets Windows x64 and VS Code 1.136.1 or later.** The stable
 1.0 baseline was regression-tested on VS Code 1.136.1.
 
 ## Current capabilities
@@ -160,12 +160,25 @@ because that operation requires a selected archive member.
 
 ## Installation
 
-Download the release VSIX from GitHub, then in VS Code use:
+### VS Code Marketplace
+
+In VS Code, open **Extensions** (`Ctrl+Shift+X`), search for **7z Secure
+Workspace**, and choose **Install**. You can also install it from the command
+line:
+
+```powershell
+code --install-extension Nishitox.7z-secure-workspace
+```
+
+### Manual VSIX installation
+
+Release VSIX packages are also available from GitHub Releases. In VS Code use:
 
 **Extensions → `...` → Install from VSIX...**
 
-The release VSIX bundles the native bridge and `7z.dll`; end users do not need a
-separate native build or Node.js installation.
+The Marketplace/VSIX package bundles the native bridge and `7z.dll`; end users
+do not need a separate native build or Node.js installation. The packaged
+extension targets Windows x64.
 
 Repository: https://github.com/Nishitox/7z-Secure-Workspace
 

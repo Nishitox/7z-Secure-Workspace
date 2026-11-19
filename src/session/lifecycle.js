@@ -749,7 +749,7 @@ class MaterializedSessionController {
 
     this.output.appendLine(
       `[MATERIALIZED SYNC] ${filesToWrite.length} file(s) written, ` +
-      `${directoriesToCreate.length} directorie(s) created, ` +
+      `${directoriesToCreate.length} ${directoriesToCreate.length === 1 ? "directory" : "directories"} created, ` +
       `${deletions.length} path(s) deleted.`
     );
 
